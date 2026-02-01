@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: voice-word-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 3141
+      POSTGRES_DB: alb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: voice-word-backend
+    environment:
+      DATABASE_URL: postgresql://postgres:3141@postgres:5432/alb
+      SECRET_KEY: ${SECRET_KEY:-voice-word-secret-key-production-2024}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GPT_MODEL: gpt-5.2
+      WHISPER_MODEL: whisper-1
+      UPLOAD_DIR: /app/uploads
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NUXT_PUBLIC_API_BASE: ${API_BASE:-http://localhost:8000/api}
+    container_name: voice-word-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  uploads_data:
